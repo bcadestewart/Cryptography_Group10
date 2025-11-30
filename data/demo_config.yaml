@@ -1,0 +1,14 @@
+pcap_file: data/sample_trace.json
+
+drop_indices:
+  - 2
+
+profiles:
+  drop_ext_info:
+    drop_indices: [2]
+    description: "Drop the client EXT_INFO message to mimic Terrapin's extension stripping."
+  drop_client_kexinit:
+    drop_indices: [0]
+    description: "Drop the initial client KEXINIT to illustrate aggressive prefix truncation."
+
+active_profile: drop_ext_info

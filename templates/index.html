@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Terrapin SSH Demo UI</title>
+  <style>
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      margin: 0;
+      padding: 1.5rem;
+      background: #111;
+      color: #eee;
+    }
+    h1, h2 {
+      margin-top: 0;
+    }
+    .card {
+      background: #1f1f1f;
+      border-radius: 8px;
+      padding: 1rem;
+      margin-bottom: 1rem;
+      box-shadow: 0 0 12px rgba(0, 0, 0, 0.4);
+    }
+    label {
+      display: inline-block;
+      margin-right: 0.5rem;
+    }
+    select, input, button {
+      padding: 0.3rem 0.5rem;
+      border-radius: 4px;
+      border: 1px solid #333;
+      background: #222;
+      color: #eee;
+    }
+    button {
+      cursor: pointer;
+      border: none;
+      background: #3b82f6;
+      color: white;
+      font-weight: 600;
+      margin-left: 0.5rem;
+    }
+    button:hover {
+      background: #2563eb;
+    }
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      margin-top: 0.5rem;
+      font-size: 0.9rem;
+    }
+    th, td {
+      border: 1px solid #333;
+      padding: 0.35rem 0.5rem;
+      text-align: left;
+    }
+    th {
+      background: #262626;
+    }
+    tr:nth-child(even) {
+      background: #181818;
+    }
+    .changed-yes {
+      background: #4b2c2c;
+    }
+    .changed-no {
+      background: #1b2c1b;
+    }
+    .small {
+      font-size: 0.8rem;
+      color: #aaa;
+    }
+    .flex {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1rem;
+    }
+    .flex > .card {
+      flex: 1;
+      min-width: 280px;
+    }
+    #status {
+      margin-top: 0.5rem;
+      font-size: 0.9rem;
+    }
+    #seqChart {
+      margin-top: 1rem;
+      max-height: 260px;
+    }
+  </style>
+
+  <!-- Chart.js for the sequence number graph -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+  <h1>Terrapin SSH Sequence Number Demo</h1>
+  <p class="small">
+    Interact with the simulator: run a clean handshake, a configured attack, or explore random packet drops.
+  </p>
+
+  <div class="card">
+    <h2>Controls</h2>
+    <div>
+      <label for="mode">Mode:</label>
+      <select id="mode">
+        <option value="baseline">Baseline (no attack)</option>
+        <option value="attack">Attack (YAML profile)</option>
+        <option value="explore">Explore (random drops)</option>
+      </select>
+
+      <span id="explore-options" style="display:none;">
+        <label for="random_drop">Random drop:</label>
+        <input type="number" id="random_drop" value="1" min="1" style="width:4rem;" />
+        <label for="seed">Seed:</label>
+        <input type="number" id="seed" value="123" style="width:5rem;" />
+      </span>
+
+      <button id="runBtn">Run Simulation</button>
+    </div>
+    <div id="status" class="small"></div>
+  </div>
+
+  <div class="flex">
+    <div class="card">
+      <h2>Baseline</h2>
+      <div id="baseline-table"></div>
+    </div>
+    <div class="card">
+      <h2>Post-Attack / Explore</h2>
+      <div id="after-table"></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Sequence Number Diff</h2>
+    <div id="diff-table"></div>
+    <canvas id="seqChart"></canvas>
+  </div>
+
+  <script>
+    const modeSelect = document.getElementById("mode");
+    const exploreOptions = document.getElementById("explore-options");
+    const statusEl = document.getElementById("status");
+    const baselineEl = document.getElementById("baseline-table");
+    const afterEl = document.getElementById("after-table");
+    const diffEl = document.getElementById("diff-table");
+    let seqChart = null;
+
+    modeSelect.addEventListener("change", () => {
+      if (modeSelect.value === "explore") {
+        exploreOptions.style.display = "inline-block";
+      } else {
+        exploreOptions.style.display = "none";
+      }
+    });
+
+    document.getElementById("runBtn").addEventListener("click", async () => {
+      const mode = modeSelect.value;
+      const payload = { mode };
+
+      if (mode === "explore") {
+        payload.random_drop = parseInt(document.getElementById("random_drop").value || "1", 10);
+        payload.seed = parseInt(document.getElementById("seed").value || "0", 10);
+      }
+
+      statusEl.textContent = "Running simulation...";
+      baselineEl.innerHTML = "";
+      afterEl.innerHTML = "";
+      diffEl.innerHTML = "";
+      renderSeqChart([]); // clear chart
+
+      try {
+        const res = await fetch("/api/run", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+
+        if (!res.ok) {
+          const errText = await res.text();
+          statusEl.textContent = `Error: ${res.status} ${errText}`;
+          return;
+        }
+
+        const data = await res.json();
+        statusEl.textContent = `Mode: ${data.mode}${data.description ? " – " + data.description : ""}${
+          data.chosen_indices ? " – dropped: " + data.chosen_indices.join(", ") : ""
+        }`;
+
+        renderPacketsTable(baselineEl, data.baseline, "Baseline packets");
+        renderPacketsTable(afterEl, data.after, "Post-attack packets");
+        renderDiffTable(diffEl, data.diff);
+        renderSeqChart(data.diff);
+
+      } catch (err) {
+        console.error(err);
+        statusEl.textContent = "Error: " + err;
+      }
+    });
+
+    function renderPacketsTable(container, packets, captionText) {
+      if (!packets || packets.length === 0) {
+        container.innerHTML = "<p class='small'>No packets to display.</p>";
+        return;
+      }
+      let html = "<table>";
+      if (captionText) {
+        html += `<caption class="small" style="caption-side: top; text-align:left;">${captionText}</caption>`;
+      }
+      html += "<thead><tr>" +
+        "<th>idx</th><th>dir</th><th>type</th><th>len</th><th>seq</th><th>dropped</th>" +
+        "</tr></thead><tbody>";
+
+      for (const p of packets) {
+        html += "<tr>" +
+          `<td>${p.index}</td>` +
+          `<td>${p.direction}</td>` +
+          `<td>${p.msg_type}</td>` +
+          `<td>${p.payload_len}</td>` +
+          `<td>${p.seq_no ?? ""}</td>` +
+          `<td>${p.dropped ? "yes" : "no"}</td>` +
+          "</tr>";
+      }
+
+      html += "</tbody></table>";
+      container.innerHTML = html;
+    }
+
+    function renderDiffTable(container, rows) {
+      if (!rows || rows.length === 0) {
+        container.innerHTML = "<p class='small'>No diff to display.</p>";
+        return;
+      }
+      let html = "<table>";
+      html += "<thead><tr>" +
+        "<th>idx</th><th>dir</th><th>type</th><th>seq_before</th><th>seq_after</th><th>changed?</th>" +
+        "</tr></thead><tbody>";
+
+      for (const r of rows) {
+        const changed = !!r.changed;
+        const rowClass = changed ? "changed-yes" : "changed-no";
+        html += `<tr class="${rowClass}">` +
+          `<td>${r.index}</td>` +
+          `<td>${r.direction}</td>` +
+          `<td>${r.msg_type}</td>` +
+          `<td>${r.seq_before ?? ""}</td>` +
+          `<td>${r.seq_after ?? ""}</td>` +
+          `<td>${changed ? "yes" : "no"}</td>` +
+          "</tr>";
+      }
+
+      html += "</tbody></table>";
+      container.innerHTML = html;
+    }
+
+    function renderSeqChart(rows) {
+      const canvas = document.getElementById("seqChart");
+      if (!canvas) return;
+
+      // Filter out any rows where we don't have both seq_before and seq_after
+      const filtered = (rows || []).filter(
+        (r) => r.seq_before !== null && r.seq_after !== null
+      );
+
+      if (filtered.length === 0) {
+        if (seqChart) {
+          seqChart.destroy();
+          seqChart = null;
+        }
+        return;
+      }
+
+      const labels = filtered.map((r) => r.index);
+      const seqBefore = filtered.map((r) => r.seq_before);
+      const seqAfter = filtered.map((r) => r.seq_after);
+
+      const ctx = canvas.getContext("2d");
+      if (seqChart) {
+        seqChart.destroy();
+      }
+
+      seqChart = new Chart(ctx, {
+        type: "line",
+        data: {
+          labels,
+          datasets: [
+            {
+              label: "Seq before attack",
+              data: seqBefore,
+              borderWidth: 2,
+              tension: 0.1,
+            },
+            {
+              label: "Seq after attack",
+              data: seqAfter,
+              borderWidth: 2,
+              borderDash: [5, 5],
+              tension: 0.1,
+            },
+          ],
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          scales: {
+            x: {
+              title: {
+                display: true,
+                text: "Packet index",
+              },
+            },
+            y: {
+              title: {
+                display: true,
+                text: "Sequence number",
+              },
+              ticks: {
+                precision: 0,
+              },
+            },
+          },
+        },
+      });
+    }
+  </script>
+</body>
+</html>

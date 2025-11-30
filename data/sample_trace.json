@@ -1,0 +1,52 @@
+[
+  {
+    "direction": "C->S",
+    "payload_len": 40,
+    "msg_type": "KEXINIT"
+  },
+  {
+    "direction": "S->C",
+    "payload_len": 120,
+    "msg_type": "KEXINIT"
+  },
+  {
+    "direction": "C->S",
+    "payload_len": 20,
+    "msg_type": "EXT_INFO"
+  },
+  {
+    "direction": "S->C",
+    "payload_len": 32,
+    "msg_type": "EXT_INFO"
+  },
+  {
+    "direction": "S->C",
+    "payload_len": 12,
+    "msg_type": "NEWKEYS"
+  },
+  {
+    "direction": "C->S",
+    "payload_len": 12,
+    "msg_type": "NEWKEYS"
+  },
+  {
+    "direction": "C->S",
+    "payload_len": 32,
+    "msg_type": "SERVICE_REQUEST"
+  },
+  {
+    "direction": "S->C",
+    "payload_len": 64,
+    "msg_type": "SERVICE_ACCEPT"
+  },
+  {
+    "direction": "C->S",
+    "payload_len": 80,
+    "msg_type": "USERAUTH_REQUEST"
+  },
+  {
+    "direction": "S->C",
+    "payload_len": 64,
+    "msg_type": "USERAUTH_SUCCESS"
+  }
+]
