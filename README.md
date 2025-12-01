@@ -12,11 +12,12 @@ It includes:
 ## Setup
 
 ```bash
-git clone YOUR_REPO_URL.git
-cd terrapin_ssh_demo_full_web
+git clone https://github.com/bcadestewart/Cryptography_Group10.git
+cd Cryptography_Group10
 
 python3 -m venv .venv
 source .venv/bin/activate
+
 pip install -r requirements.txt
 ```
 
@@ -56,4 +57,33 @@ All data required to run the demo is in the `data/` directory:
 
 - `sample_trace.json`: synthetic SSH-like handshake trace.
 - `demo_config.yaml`: config with attack profiles.
+
+## Functionality
+
+- Baseline simulation: Displays normal SSH handshake with proper sequence number assignment for all packets
+-  Two pre-configured attack scenarios:
+- `drop_ext_info`: Drops client EXT_INFO message (index 2) to mimic Terrapin's extension stripping
+- `drop_client_kexinit`: Drops initial client KEXINIT (index 0) to demonstrate aggressive prefix truncation
+- Web visualization: Interactive Flask-based UI with tables and line graphs showing sequence number manipulation
+- Random exploration mode: Test arbitrary packet drop combinations with configurable random seeds
+- Diff generation: Automatic side-by-side comparison highlighting which sequence numbers changed (color-coded: green = unchanged, red = manipulated)
+
+
+## Academic References
+
+
+
+**Ylonen, T., & Lonvick, C. (Eds.). (2006).** *The Secure Shell (SSH) Protocol Architecture* (RFC 4251). Internet Engineering Task Force. https://doi.org/10.17487/RFC4251
+
+This RFC defines the fundamental SSH protocol architecture, including the Binary Packet Protocol and the implicit per-direction sequence number mechanism that the Terrapin attack exploits. It establishes the baseline security model, key exchange procedures, and handshake protocols that subsequent SSH implementations follow. Understanding this foundational specification is essential for comprehending how sequence number manipulation can compromise SSH security.
+
+
+
+**Bäumer, F., Brinkrolf, J., & Kunze, G. (2023).** *Terrapin Attack: Breaking SSH Channel Integrity By Sequence Number Manipulation*. arXiv preprint arXiv:2312.12422. https://arxiv.org/abs/2312.12422
+
+This paper presents the Terrapin attack, discovered in 2023, which demonstrates how prefix truncation during the SSH handshake can manipulate sequence numbers to bypass security extensions like strict key exchange. The research directly builds upon the RFC 4251 protocol specification to identify previously unknown vulnerabilities in widely-deployed SSH implementations including OpenSSH, PuTTY, and other major clients/servers. The attack affects the integrity of encrypted SSH connections and has led to security updates across the industry.
+
+
+
+
 
